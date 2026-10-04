@@ -16,7 +16,7 @@ if hasattr(sys.stderr, "reconfigure"):
 from dataclasses import dataclass, field
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import LLM_API_KEY, LLM_MODEL, LLM_EXTRA_PARAMS, get_llm_client
+from config import LLM_API_KEY
 
 
 @dataclass
@@ -34,19 +34,10 @@ class EnrichedChunk:
 
 
 def _chat(system: str, user: str, max_tokens: int, json_mode: bool = False) -> str:
-    """Gọi chat completion (OpenAI hoặc Gemini, temperature 0). Raise nếu lỗi — caller tự fallback."""
-    client = get_llm_client()
-    kwargs = dict(LLM_EXTRA_PARAMS)
-    if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
-    resp = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        max_tokens=max_tokens,
-        temperature=0,
-        **kwargs,
-    )
-    return resp.choices[0].message.content.strip()
+    """Gọi chat completion (OpenAI hoặc Gemini, temperature 0, có cache). Raise nếu lỗi — caller tự fallback."""
+    from src.llm import chat
+    return chat([{"role": "system", "content": system}, {"role": "user", "content": user}],
+                max_tokens=max_tokens, json_mode=json_mode)
 
 
 def _doc_title(source: str) -> str:

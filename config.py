@@ -14,15 +14,19 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
     LLM_API_KEY = GEMINI_API_KEY
     LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-    LLM_MODEL = "gemini-3.8-flash"
-    LLM_EXTRA_PARAMS = {"reasoning_effort": "none"}  # tắt thinking: nhanh hơn, không ăn max_tokens
+    # Free tier giới hạn request/ngày theo TỪNG model → src/llm.py xoay vòng khi model hết quota.
+    LLM_MODELS = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash",
+                  "gemini-flash-latest", "gemini-3-flash-preview", "gemini-3.5-flash-lite",
+                  "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+    LLM_REASONING_EFFORT = "none"  # tắt thinking: nhanh hơn, không ăn max_tokens
     EVAL_EMBEDDING_MODEL = "gemini-embedding-001"
 else:
     LLM_API_KEY = OPENAI_API_KEY
     LLM_BASE_URL = None
-    LLM_MODEL = "gpt-4o-mini"
-    LLM_EXTRA_PARAMS = {}
+    LLM_MODELS = ["gpt-4o-mini"]
+    LLM_REASONING_EFFORT = None
     EVAL_EMBEDDING_MODEL = "text-embedding-3-small"
+LLM_MODEL = LLM_MODELS[0]
 
 
 def get_llm_client():

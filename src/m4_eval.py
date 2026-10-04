@@ -39,7 +39,7 @@ def evaluate_ragas(questions: list[str], answers: list[str],
     zeros = {m: 0.0 for m in METRICS}
     zeros["per_question"] = []
     # RAGAS cần LLM judge + embeddings (OpenAI hoặc Gemini) → lỗi gì cũng trả zeros để pipeline không crash.
-    from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, LLM_EXTRA_PARAMS, EVAL_EMBEDDING_MODEL
+    from config import LLM_API_KEY, LLM_BASE_URL, EVAL_EMBEDDING_MODEL
     if not LLM_API_KEY:
         print("  ⚠️  RAGAS evaluation skipped: chưa set OPENAI_API_KEY / GEMINI_API_KEY (.env).")
         return zeros
@@ -48,25 +48,28 @@ def evaluate_ragas(questions: list[str], answers: list[str],
         from ragas import evaluate
         from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
         from datasets import Dataset
-        from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+        from langchain_openai import OpenAIEmbeddings
+        from ragas.run_config import RunConfig
+        from src.llm import make_ragas_llm
 
         dataset = Dataset.from_dict({
             "question": questions, "answer": answers,
             "contexts": contexts, "ground_truth": ground_truths,
         })
-        if LLM_BASE_URL:
-            # Gemini OpenAI-compat không hỗ trợ n>1 ("Multiple candidates is not enabled") →
-            # answer_relevancy sinh 1 câu hỏi ngược thay vì 3.
-            answer_relevancy.strictness = 1
+        # Gemini không hỗ trợ n>1 ("Multiple candidates is not enabled") và free tier giới hạn request
+        # → answer_relevancy sinh 1 câu hỏi ngược thay vì 3.
+        answer_relevancy.strictness = 1
         result = evaluate(
             dataset,
             metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
-            llm=ChatOpenAI(model=LLM_MODEL, temperature=0, api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
-                           max_retries=6, model_kwargs=dict(LLM_EXTRA_PARAMS)),
+            # LLM judge qua src/llm.py: cache + xoay vòng model khi hết quota
+            llm=make_ragas_llm(),
             # check_embedding_ctx_length=False: gửi text thô (Gemini không nhận token ids của tiktoken)
             embeddings=OpenAIEmbeddings(model=EVAL_EMBEDDING_MODEL, api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
                                         check_embedding_ctx_length=False),
             raise_exceptions=False,
+            # Ít worker + timeout dài: tránh dội rate limit (16 worker mặc định → TimeoutError hàng loạt)
+            run_config=RunConfig(max_workers=4, timeout=600, max_retries=3),
         )
         df = result.to_pandas()
 
