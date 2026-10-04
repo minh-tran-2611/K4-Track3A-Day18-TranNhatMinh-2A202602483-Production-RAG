@@ -70,6 +70,9 @@ class BM25Search:
                 for i in top_indices if scores[i] > 0]
 
 
+_ENCODER = None
+
+
 class DenseSearch:
     def __init__(self):
         from qdrant_client import QdrantClient
@@ -82,8 +85,12 @@ class DenseSearch:
 
     def _get_encoder(self):
         if self._encoder is None:
-            from sentence_transformers import SentenceTransformer
-            self._encoder = SentenceTransformer(EMBEDDING_MODEL)
+            # Dùng chung 1 encoder (~2GB) giữa các instance (baseline + production) thay vì load 2 bản.
+            global _ENCODER
+            if _ENCODER is None:
+                from sentence_transformers import SentenceTransformer
+                _ENCODER = SentenceTransformer(EMBEDDING_MODEL)
+            self._encoder = _ENCODER
         return self._encoder
 
     def index(self, chunks: list[dict], collection: str = COLLECTION_NAME) -> None:
